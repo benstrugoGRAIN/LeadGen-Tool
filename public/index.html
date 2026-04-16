@@ -481,7 +481,7 @@ async function findLeads(){
   const seed=SEED.map(c=>c.name+' ('+c.vertical+', '+c.size+', '+c.geo+', fx: '+c.fx.join(', ')+')').join('\n');
   const prompt='You are a B2B sales intelligence tool for FX/payments providers.\n\nAnalyze these 21 existing customers and return '+8+' NEW real companies to target.\n\nSEED CUSTOMERS:\n'+seed+'\n\nFILTERS: verticals='+verticals.join(',')+', sizes='+sizes.join(',')+', geos='+geos.join(',')+', fx_required='+fxSignals.join(',')+', exclude='+([...excludes].join(',')||'none')+(extra?', extra='+extra:'')+'\n\nFX signal definitions: multi_currency=processes multiple currencies, cross_border=international trade/transactions, intl_customers=customers in multiple countries, remittance=international payouts, treasury=hedging/treasury needs\n\nRules: only real companies, avoid giants (Booking.com, Expedia, Stripe, Wise), do NOT include seed companies, must match fx_required signals.\n\nReturn ONLY a valid JSON array:\n[{"name":"","domain":"","vertical":"","size":"","geo":"","hq":"City, Country","fx_signals":[],"why":"1-2 sentences","fit_score":0,"linkedin":""}]';
   try{
-    const res=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:1600,messages:[{role:'user',content:prompt}]})});
+    const res=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1600,messages:[{role:'user',content:prompt}]})});
     const data=await res.json();
     const text=(data.content||[]).find(b=>b.type==='text')?.text||'';
     currentResults=JSON.parse(text.replace(/```json|```/g,'').trim());
@@ -518,7 +518,7 @@ async function findLookalikes(){
     // Step 1: Sonnet profiles the company
     const profilePrompt='You are a business intelligence analyst specialising in FX and cross-border payments.\n\nResearch and profile this company: "'+companyName+'"\n\nReturn ONLY valid JSON (no markdown):\n{"name":"official company name","domain":"domain.com","description":"2-3 sentence description of what the company does","vertical":"one of: travel/fintech/logistics/ecommerce/saas/marketplace","size":"one of: startup/smb/mid/enterprise","geo":"primary region: global/apac/emea/americas","hq":"City, Country","fx_exposure":["list of fx exposure types from: multi_currency/cross_border/intl_customers/remittance/treasury"],"key_traits":["3-5 specific traits useful for finding lookalikes, e.g. B2B travel distributor, sells to hotels, processes bookings in 50+ currencies"],"linkedin":"linkedin url if known or empty string"}';
 
-    const r1=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:600,messages:[{role:'user',content:profilePrompt}]})});
+    const r1=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-5-20250929',max_tokens:600,messages:[{role:'user',content:profilePrompt}]})});
     const d1=await r1.json();
     const profileText=(d1.content||[]).find(b=>b.type==='text')?.text||'';
     const profile=JSON.parse(profileText.replace(/```json|```/g,'').trim());
@@ -543,7 +543,7 @@ async function findLookalikes(){
     // Step 2: Haiku finds lookalikes using the profile
     const lookalikesPrompt='You are a B2B sales intelligence tool for FX/payments providers.\n\nFind '+count+' real companies that are strong lookalikes to:\n\nCOMPANY PROFILE:\nName: '+profile.name+'\nDescription: '+profile.description+'\nVertical: '+profile.vertical+'\nSize: '+profile.size+'\nGeo: '+profile.geo+'\nFX exposure: '+(profile.fx_exposure||[]).join(', ')+'\nKey traits: '+(profile.key_traits||[]).join('; ')+'\n\nGEO FILTER: '+(geo==='any'?'any geography':'focus on '+geo)+'\n'+(extra?'EXTRA: '+extra+'\n':'')+'\nRules:\n- Real, specific companies only (not fictional)\n- Do NOT include "'+profile.name+'" itself\n- Avoid major household names (Booking.com, Expedia, Stripe, Wise, etc.)\n- Target growth-stage and mid-market companies\n- Must have genuine FX / cross-border exposure like the profiled company\n- Explain specifically HOW they are similar\n\nReturn ONLY valid JSON array:\n[{"name":"","domain":"","vertical":"","size":"","geo":"","hq":"City, Country","fx_signals":[],"why":"1-2 sentences on similarity and FX exposure","fit_score":0,"linkedin":""}]';
 
-    const r2=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:2000,messages:[{role:'user',content:lookalikesPrompt}]})});
+    const r2=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:2000,messages:[{role:'user',content:lookalikesPrompt}]})});
     const d2=await r2.json();
     const text2=(d2.content||[]).find(b=>b.type==='text')?.text||'';
     currentLookalikes=JSON.parse(text2.replace(/```json|```/g,'').trim());
