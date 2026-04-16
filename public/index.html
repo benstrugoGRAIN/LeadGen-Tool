@@ -481,7 +481,7 @@ async function findLeads(){
     const res=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:Math.min(4000,filterCount*250+500),messages:[{role:'user',content:prompt}]})});
     const data=await res.json();
     const text=(data.content||[]).find(b=>b.type==='text')?.text||'';
-    currentResults=JSON.parse(text.replace(/```json|```/g,'').trim());
+    currentResults=parseLeadsJSON(text);
     renderResults(currentResults,'results-area',true);
     document.getElementById('results-toolbar').style.display='flex';
   }catch(e){
@@ -543,7 +543,7 @@ async function findLookalikes(){
     const r2=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:Math.min(4000,count*250+500),messages:[{role:'user',content:lookalikesPrompt}]})});
     const d2=await r2.json();
     const text2=(d2.content||[]).find(b=>b.type==='text')?.text||'';
-    currentLookalikes=JSON.parse(text2.replace(/```json|```/g,'').trim());
+    currentLookalikes=parseLeadsJSON(text2);
 
     // Render profile card + results
     const profileHtml='<div class="profile-card">'
@@ -724,7 +724,7 @@ async function loadMore(isLookalike=false){
     const res=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:Math.min(4000,(parseInt(document.getElementById(isLookalike?'lookalike-count-input':'filter-count').value)||8)*250+500),messages:[{role:'user',content:prompt}]})});
     const data=await res.json();
     const text=(data.content||[]).find(b=>b.type==='text')?.text||'';
-    const newLeads=JSON.parse(text.replace(/```json|```/g,'').trim());
+    const newLeads=parseLeadsJSON(text);
     if(isLookalike){
       currentLookalikes=[...currentLookalikes,...newLeads];
       const profCard=document.querySelector('.profile-card');
@@ -739,6 +739,32 @@ async function loadMore(isLookalike=false){
     showToast('Error loading more: '+e.message);
     btn.disabled=false; btn.textContent='Load more results';
   }
+}
+
+function parseLeadsJSON(text) {
+  // Clean markdown fences
+  let clean = text.replace(/```json|```/g, '').trim();
+  
+  // Try direct parse first
+  try { return JSON.parse(clean); } catch(e) {}
+  
+  // Find the JSON array boundaries
+  const start = clean.indexOf('[');
+  if (start === -1) throw new Error('No JSON array found in response');
+  
+  // Try progressively shorter strings to find valid JSON
+  // (handles truncated responses)
+  let end = clean.lastIndexOf('}');
+  while (end > start) {
+    try {
+      const attempt = clean.slice(start, end + 1) + ']';
+      const parsed = JSON.parse(attempt);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch(e) {}
+    end = clean.lastIndexOf('}', end - 1);
+  }
+  
+  throw new Error('Could not parse response as JSON');
 }
 
 function resetAll(){
