@@ -237,7 +237,7 @@ textarea{resize:vertical;min-height:60px;line-height:1.5}
               <div class="filter-label">Extra context</div>
               <textarea id="extra-ctx" placeholder="e.g. B2B only, focus on Israel/UAE, exclude crypto..."></textarea>
             </div>
-            <button class="btn-primary" id="find-btn" onclick="findLeads()">
+            <div class="filter-section"><div class="filter-label">Number of results</div><div style="display:flex;align-items:center;gap:8px"><input type="number" id="filter-count" value="8" min="1" max="50" style="width:70px;padding:7px 10px;font-size:13px"/><span style="font-size:12px;color:var(--muted)">max 50</span></div></div><button class="btn-primary" id="find-btn" onclick="findLeads()">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5"/><path d="M9.5 9.5L12.5 12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
               Find similar companies
             </button>
@@ -281,11 +281,10 @@ textarea{resize:vertical;min-height:60px;line-height:1.5}
               <div id="seed-suggestions" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px"></div>
             </div>
             <div class="filter-section">
-              <div class="filter-label">How many results</div>
-              <div class="chips" id="lookalike-count">
-                <div class="chip" data-c="5">5</div>
-                <div class="chip on" data-c="8">8</div>
-                <div class="chip" data-c="12">12</div>
+              <div class="filter-label">Number of results</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <input type="number" id="lookalike-count-input" value="8" min="1" max="50" style="width:70px;padding:7px 10px;font-size:13px"/>
+                <span style="font-size:12px;color:var(--muted)">max 50</span>
               </div>
             </div>
             <div class="filter-section">
@@ -445,9 +444,6 @@ document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',functio
   if(this.closest('#lookalike-geo')){
     document.querySelectorAll('#lookalike-geo .chip').forEach(x=>x.classList.remove('on'));
     this.classList.add('on');
-  } else if(this.closest('#lookalike-count')){
-    document.querySelectorAll('#lookalike-count .chip').forEach(x=>x.classList.remove('on'));
-    this.classList.add('on');
   } else {
     this.classList.toggle('on');
   }
@@ -474,18 +470,19 @@ async function findLeads(){
   const fxSignals=getSelected('fxsig','f');
   const extra=document.getElementById('extra-ctx').value.trim();
   if(!verticals.length||!sizes.length){showToast('Select at least one vertical and size');return;}
+  const filterCount=parseInt(document.getElementById('filter-count').value)||8;
   const btn=document.getElementById('find-btn');
   btn.disabled=true;btn.textContent='Searching...';
   document.getElementById('results-toolbar').style.display='none';
   document.getElementById('results-area').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;padding:50px 20px;gap:14px"><div class="spinner"></div><div style="font-size:13px;color:var(--muted);font-family:\'DM Mono\',monospace">Analyzing profiles...</div></div>';
   const seed=SEED.map(c=>c.name+' ('+c.vertical+', '+c.size+', '+c.geo+', fx: '+c.fx.join(', ')+')').join('\n');
-  const prompt='You are a B2B sales intelligence tool for FX/payments providers.\n\nAnalyze these 21 existing customers and return '+8+' NEW real companies to target.\n\nSEED CUSTOMERS:\n'+seed+'\n\nFILTERS: verticals='+verticals.join(',')+', sizes='+sizes.join(',')+', geos='+geos.join(',')+', fx_required='+fxSignals.join(',')+', exclude='+([...excludes].join(',')||'none')+(extra?', extra='+extra:'')+'\n\nFX signal definitions: multi_currency=processes multiple currencies, cross_border=international trade/transactions, intl_customers=customers in multiple countries, remittance=international payouts, treasury=hedging/treasury needs\n\nRules: only real companies, avoid giants (Booking.com, Expedia, Stripe, Wise), do NOT include seed companies, must match fx_required signals.\n\nReturn ONLY a valid JSON array:\n[{"name":"","domain":"","vertical":"","size":"","geo":"","hq":"City, Country","fx_signals":[],"why":"1-2 sentences","fit_score":0,"linkedin":""}]';
+  const prompt='You are a B2B sales intelligence tool for FX/payments providers.\n\nAnalyze these 21 existing customers and return '+filterCount+' NEW real companies to target.\n\nSEED CUSTOMERS:\n'+seed+'\n\nFILTERS: verticals='+verticals.join(',')+', sizes='+sizes.join(',')+', geos='+geos.join(',')+', fx_required='+fxSignals.join(',')+', exclude='+([...excludes].join(',')||'none')+(extra?', extra='+extra:'')+'\n\nFX signal definitions: multi_currency=processes multiple currencies, cross_border=international trade/transactions, intl_customers=customers in multiple countries, remittance=international payouts, treasury=hedging/treasury needs\n\nRules: only real companies, avoid giants (Booking.com, Expedia, Stripe, Wise), do NOT include seed companies, must match fx_required signals.\n\nReturn ONLY a valid JSON array:\n[{"name":"","domain":"","vertical":"","size":"","geo":"","hq":"City, Country","fx_signals":[],"why":"1-2 sentences","fit_score":0,"linkedin":""}]';
   try{
     const res=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1600,messages:[{role:'user',content:prompt}]})});
     const data=await res.json();
     const text=(data.content||[]).find(b=>b.type==='text')?.text||'';
     currentResults=JSON.parse(text.replace(/```json|```/g,'').trim());
-    renderResults(currentResults,'results-area');
+    renderResults(currentResults,'results-area',true);
     document.getElementById('results-toolbar').style.display='flex';
   }catch(e){
     document.getElementById('results-area').innerHTML='<div style="color:var(--danger);padding:20px;font-size:13px">Error: '+e.message+'</div>';
@@ -499,7 +496,7 @@ async function findLeads(){
 async function findLookalikes(){
   const companyName=document.getElementById('lookalike-input').value.trim();
   if(!companyName){showToast('Enter a company name');return;}
-  const count=getSelected('lookalike-count','c')[0]||'8';
+  const count=parseInt(document.getElementById('lookalike-count-input').value)||8;
   const geo=getSelected('lookalike-geo','lg')[0]||'any';
   const extra=document.getElementById('lookalike-ctx').value.trim();
   const btn=document.getElementById('lookalike-btn');
@@ -581,7 +578,7 @@ function setStep(done,active){
 // --- Shared render ---
 function isSaved(name){return savedLeads.some(s=>s.name===name);}
 
-function buildResultsHtml(leads){
+function buildResultsHtml(leads,showLoadMore=false){
   if(!leads||!leads.length)return'<p style="color:var(--muted);padding:20px;text-align:center">No results found.</p>';
   const sorted=[...leads].sort((a,b)=>b.fit_score-a.fit_score);
   let html='<div style="font-family:\'DM Mono\',monospace;font-size:11px;color:var(--muted);margin-bottom:14px">'+sorted.length+' lookalikes &middot; sorted by fit score</div>';
@@ -604,11 +601,15 @@ function buildResultsHtml(leads){
       +(c.linkedin?'<button class="btn-sm" onclick="window.open(\''+c.linkedin+'\',\'_blank\')">LinkedIn</button>':'')
       +'</div></div>';
   });
+  if(showLoadMore && leads && leads.length > 0){
+    const isLookalike = showLoadMore && currentLookalikes.length > 0;
+    html += '<div style="text-align:center;margin-top:16px"><button class="btn-ghost" style="padding:10px 28px;font-size:13px" onclick="loadMore('+(isLookalike?'true':'false')+')">Load more results</button></div>';
+  }
   return html;
 }
 
-function renderResults(leads,targetId){
-  document.getElementById(targetId).innerHTML=buildResultsHtml(leads);
+function renderResults(leads,targetId,showLoadMore=false){
+  document.getElementById(targetId).innerHTML=buildResultsHtml(leads,showLoadMore);
 }
 
 function toggleSave(btn){
@@ -694,6 +695,51 @@ async function doClayPush(){
 function openModal(id){document.getElementById(id).classList.add('show');}
 function closeModal(id){document.getElementById(id).classList.remove('show');}
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show');}));
+
+async function loadMore(isLookalike=false){
+  const btn = event.target;
+  btn.disabled=true; btn.textContent='Loading...';
+  const alreadyFound = isLookalike ? currentLookalikes.map(c=>c.name) : currentResults.map(c=>c.name);
+  const excludeNames = [...excludes, ...alreadyFound].join(',');
+
+  let prompt;
+  if(isLookalike){
+    const companyName = document.getElementById('lookalike-input').value.trim();
+    const count = parseInt(document.getElementById('lookalike-count-input').value)||8;
+    const geo = getSelected('lookalike-geo','lg')[0]||'any';
+    const extra = document.getElementById('lookalike-ctx').value.trim();
+    prompt='Find '+count+' MORE real companies that are lookalikes to "'+companyName+'" with FX/cross-border exposure. Do NOT include any of these already found: '+excludeNames+'. Geography: '+(geo==='any'?'any':geo)+'.'+(extra?' Extra: '+extra:'')+'\n\nReturn ONLY valid JSON array:\n[{"name":"","domain":"","vertical":"","size":"","geo":"","hq":"City, Country","fx_signals":[],"why":"1-2 sentences","fit_score":0,"linkedin":""}]';
+  } else {
+    const verticals=getSelected('verticals','v');
+    const sizes=getSelected('sizes','s');
+    const geos=getSelected('geos','g');
+    const fxSignals=getSelected('fxsig','f');
+    const extra=document.getElementById('extra-ctx').value.trim();
+    const count=parseInt(document.getElementById('filter-count').value)||8;
+    const seed=SEED.map(c=>c.name+' ('+c.vertical+', '+c.size+', '+c.geo+', fx: '+c.fx.join(', ')+')').join('\n');
+    prompt='You are a B2B sales intelligence tool for FX/payments providers.\n\nFind '+count+' MORE NEW real companies (different from already found ones).\n\nSEED: '+seed+'\n\nFILTERS: verticals='+verticals.join(',')+', sizes='+sizes.join(',')+', geos='+geos.join(',')+', fx_required='+fxSignals.join(',')+'.\n\nDo NOT include: '+excludeNames+'\n\nReturn ONLY valid JSON array:\n[{"name":"","domain":"","vertical":"","size":"","geo":"","hq":"City, Country","fx_signals":[],"why":"1-2 sentences","fit_score":0,"linkedin":""}]';
+  }
+
+  try {
+    const res=await fetch('/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1600,messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const text=(data.content||[]).find(b=>b.type==='text')?.text||'';
+    const newLeads=JSON.parse(text.replace(/```json|```/g,'').trim());
+    if(isLookalike){
+      currentLookalikes=[...currentLookalikes,...newLeads];
+      const profCard=document.querySelector('.profile-card');
+      const profHtml=profCard?profCard.outerHTML:'';
+      document.getElementById('lookalike-results').innerHTML=profHtml+buildResultsHtml(currentLookalikes,true);
+    } else {
+      currentResults=[...currentResults,...newLeads];
+      renderResults(currentResults,'results-area',true);
+    }
+    showToast('Loaded '+newLeads.length+' more results',true);
+  } catch(e){
+    showToast('Error loading more: '+e.message);
+    btn.disabled=false; btn.textContent='Load more results';
+  }
+}
 
 function resetAll(){
   document.querySelectorAll('#verticals .chip,#sizes .chip,#geos .chip,#fxsig .chip').forEach(c=>{
