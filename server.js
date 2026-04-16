@@ -9,7 +9,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const API_KEY = process.env.ANTHROPIC_API_KEY;
 const TOOL_SECRET = process.env.TOOL_SECRET;
 
-async function callAnthropic(body, retries = 3) {
+async function callAnthropic(body, retries = 5) {
   for (let i = 0; i < retries; i++) {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -23,7 +23,7 @@ async function callAnthropic(body, retries = 3) {
 
     if (response.status === 529) {
       console.log(`Anthropic overloaded (529), retry ${i + 1}/${retries}...`);
-      await new Promise(r => setTimeout(r, 2000 * (i + 1))); // wait 2s, 4s, 6s
+      await new Promise(r => setTimeout(r, 5000 * (i + 1))); // wait 2s, 4s, 6s
       continue;
     }
 
